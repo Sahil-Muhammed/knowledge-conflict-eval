@@ -1,0 +1,38 @@
+llama-server up on :8080 (/tmp/models/Llama-3.2-3B-Instruct-Q4_K_M.gguf)
+[belief llama3.2-3b] 1/20
+[belief llama3.2-3b] 2/20
+[belief llama3.2-3b] 3/20
+[belief llama3.2-3b] 4/20
+[belief llama3.2-3b] 5/20
+[belief llama3.2-3b] 6/20
+[belief llama3.2-3b] 7/20
+[belief llama3.2-3b] 8/20
+[belief llama3.2-3b] 9/20
+[belief llama3.2-3b] 10/20
+[belief llama3.2-3b] 11/20
+[belief llama3.2-3b] 12/20
+[belief llama3.2-3b] 13/20
+[belief llama3.2-3b] 14/20
+[belief llama3.2-3b] 15/20
+[belief llama3.2-3b] 16/20
+[belief llama3.2-3b] 17/20
+[belief llama3.2-3b] 18/20
+[belief llama3.2-3b] 19/20
+[belief llama3.2-3b] 20/20
+llama-server up on :8080 (/tmp/models/Llama-3.2-3B-Instruct-Q4_K_M.gguf)
+[conflict llama3.2-3b] 1/20 (unknown)
+[conflict llama3.2-3b] 2/20 (unknown)
+[conflict llama3.2-3b] 3/20 (unknown)
+[conflict llama3.2-3b] 5/20 (unknown)
+[conflict llama3.2-3b] 6/20 (unknown)
+[conflict llama3.2-3b] 7/20 (unknown)
+[conflict llama3.2-3b] 9/20 (unknown)
+[conflict llama3.2-3b] 10/20 (known)
+[conflict llama3.2-3b] 11/20 (unknown)
+[conflict llama3.2-3b] 13/20 (unknown)
+[conflict llama3.2-3b] 14/20 (unknown)
+[conflict llama3.2-3b] 15/20 (unknown)
+[conflict llama3.2-3b] 17/20 (unknown)
+[conflict llama3.2-3b] 18/20 (unknown)
+[conflict llama3.2-3b] 19/20 (unknown)
+[conflict llama3.2-3b] 20/20 (unknown)

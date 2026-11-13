@@ -11,6 +11,7 @@ import ast
 import hashlib
 import json
 import random
+import re
 from pathlib import Path
 
 # Preferred order when a question appears in several source files.
@@ -22,8 +23,10 @@ def aliases(ground_truth):
 
 
 def mentions(text, alias_list):
+    """Substring match, except that all-digit aliases must stand alone ("18" is not in "1875")."""
     text = text.lower()
-    return any(a.lower() in text for a in alias_list)
+    return any(re.search(rf"(?<!\d){a}(?!\d)", text) if a.isdigit() else a.lower() in text
+               for a in alias_list)
 
 
 def to_item(row, source):

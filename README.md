@@ -31,13 +31,16 @@ the passage order are randomised with a fixed seed per (item, condition, framing
 
 Conditions (`kc/prompts.py: CONDITIONS`): `true`, `false`, `true+false`, `2true+1false`,
 `1true+2false`, `irrelevant`, `own+false` (the model's own closed-book reasoning vs a fake
-passage; this is the paper's headline setup and runs on `known` items only).
+passage; this is the paper's headline setup and runs on `known` items only). `false2` and
+`true+false2` use the item's second fake passage instead of the first, for item sets where
+the two fakes are different attack styles (see the legal set below).
 
 Framings (`kc/prompts.py: FRAMINGS`):
 - `info`: the paper's wording, "according to the given information"
 - `info+knowledge`: the paper's wording plus "and your knowledge"
 - `context_only`: the "ideal RAG" instruction, answer only from the context
 - `skeptical`: a prompt-level defence that warns the context may be poisoned
+- `conflict_aware`: a prompt-level defence that asks for "Uncertain" when sources disagree
 
 Headline metrics (`kc/report.py: HEADLINE`):
 - **susceptibility**: known fact + fake evidence → picks the fake (poisoning success)
@@ -46,20 +49,52 @@ Headline metrics (`kc/report.py: HEADLINE`):
 - **majority_poison**: fake passages outnumber true ones
 - **own_vs_fake**: the paper's memorization ratio
 - **distraction**: an irrelevant passage shouldn't change a known answer
+- **clean_known**: known fact + true evidence, the no-attack accuracy a defence must not lower
+
+Multiple-choice records also store `probs`, the first-token probability of each label, so
+confidence-based analyses need no rerun.
+
+## Mitigations
+
+`python run.py defend` runs training-free defences (`kc/defences.py`) on the same passage
+order and option order as the `info` baseline, so each defence is paired with the baseline.
+They show up in the report as `def:<name>` columns beside the framings.
+
+| defence | model calls | idea |
+|---|---|---|
+| `recall` | 1 | the model's closed-book answer is added to the context as a labelled source (one-call Astute RAG) |
+| `screen` | k+1 | each passage is checked against the model's knowledge; flagged ones are dropped (TrustRAG's self-assessment step) |
+| `vote` | k | one answer per passage in isolation, then a majority vote (RobustRAG's isolate-then-aggregate) |
+| `prior_keep` | 0 extra | if the baseline answer contradicts a consistent closed-book belief, keep the belief |
+| `prior_abstain` | 0 extra | same test, but answer "Uncertain" |
+
+Read a defence on three rows together: **susceptibility** / **majority_poison** (should fall),
+**clean_known** (should not fall) and **uptake** (should not fall). A defence that leans on the
+model's memory lowers susceptibility on `known` items but blocks true evidence wherever the
+model is consistently wrong, which for 3-4B models is often. The report also prints how often
+`screen` flags true, fake and irrelevant passages.
 
 ## Running
 
 ```bash
 python run.py prepare --n 500                     # data/items.jsonl, stratified by popularity
 
-# per model; --serve starts llama-server with the GGUF from models.json and stops it afterwards
+python fetch_models.py --models-dir /mnt/comp/models   # GGUFs listed in models.json
+
+# per model; --serve starts llama-server with the model's GGUF (from --models-dir, default
+# /mnt/comp/models) and stops it afterwards. Add --ngl 99 to offload to a GPU.
 python run.py belief   --model llama3.2-3b --serve
 python run.py conflict --model llama3.2-3b --serve
-#   --framings info info+knowledge context_only skeptical
+#   --framings info info+knowledge context_only skeptical conflict_aware
 #   --conditions true false true+false 2true+1false 1true+2false irrelevant own+false
 #   --limit 20   for smoke tests
+python run.py defend   --model llama3.2-3b --serve     # after belief; --defences recall screen vote ...
 
 python run.py report                              # results/report.md + results/report.csv
+
+# or all models in one go: one worker per GPU, then the report
+python run_all.py --gpus 0 1 --ngl 99 --models-dir /path/to/ggufs --defences recall screen vote prior_keep prior_abstain
+python run_all.py --gpus cpu --threads 8 --limit 5   # laptop smoke test
 ```
 
 Results are appended to `results/<model>.jsonl` with one record per model call (prompt,
@@ -77,6 +112,27 @@ Measured: belief calls take about 3 s and conflict calls about 8–25 s (200–5
 With the defaults (2 framings × 4 conditions) and 500 items, that is about 10 h per model.
 Use `--limit` locally and do full runs on a GPU.
 
+## Kaggle
+
+`kaggle/kc-eval.ipynb` is a self-contained notebook: the harness and `data/items.jsonl` are
+embedded in it. The notebook:
+1. builds llama.cpp `b6814` (the same version as the laptop) with CUDA,
+2. downloads the GGUFs,
+3. runs `run_all.py` with one model per T4,
+4. saves `kc-eval/results/` and `results.zip` as notebook output.
+
+1. kaggle.com → *Create → New Notebook → File → Import Notebook* → upload `kaggle/kc-eval.ipynb`.
+2. *Settings*: Accelerator **GPU T4 x2**, Internet **On**. (Internet needs a phone-verified account.)
+3. Quick check: set `LIMIT = 20` in the config cell and *Run All* interactively.
+4. Full run: set `LIMIT = None`, then *Save Version → Save & Run All (Commit)*. It runs in the
+   background (12 h cap) and the results appear under the version's *Output*.
+5. To resume an unfinished run, or to skip the llama.cpp build next time, *Add Input* → this
+   notebook's previous output. Finished calls and the compiled `llama-server` are reused.
+
+After changing the harness or the item set, run `python kaggle/build_notebook.py` and
+re-import the notebook. Download `results.zip` and unzip it into `results/` to run `report`
+locally.
+
 ## Known caveats
 
 - **Noisy Wikipedia-aligned passages.** In some ConflictQA items the second "true" passage
@@ -91,8 +147,31 @@ Use `--limit` locally and do full runs on a GPU.
 - **Option-order bias.** This is averaged out by randomised order. For the belief stage
   both orders are run explicitly.
 
-## Adding the NetSec poisoning set
+- **Few `known` items.** The belief rule is strict and the sample is spread over popularity,
+  so a 20-item run leaves 1-3 `known` items per model. `prepare --min-popularity 5000` keeps
+  only entities the models are likely to know.
 
-Write items in the same schema as `data/items.jsonl` (true/false claims plus passages; the
-fake chunks in the MCP repo's `src/rag/poison.py` are a starting point) to a separate file
-and point `ITEMS` in `run.py` at it, or add a `--items` flag.
+## Other item sets
+
+`--items` and `--results` go before the subcommand; keep one results directory per item set.
+
+```bash
+python legal/build_items.py        # data/legal_items.jsonl from legal/seed_facts.jsonl
+python run.py --items data/legal_items.jsonl --results results_legal belief   --model llama3.2-3b --serve
+python run.py --items data/legal_items.jsonl --results results_legal conflict --model llama3.2-3b --serve \
+    --conditions true false false2 true+false true+false2 irrelevant
+python run.py --items data/legal_items.jsonl --results results_legal defend   --model llama3.2-3b --serve \
+    --conditions true false false2 true+false true+false2
+python run.py --results results_legal report
+```
+
+**Indian-law pilot set** (`legal/`): 42 points of Indian law (Constitution, central statutes,
+and the 2024 IPC/CrPC to BNS/BNSS transition). For each, the first fake passage is the real
+provision with only the answer changed (`swap`), and the second is either a self-contained
+fake Gazette amendment (`amendment`) or, for transition items, the authentic but repealed
+provision (`stale`). The seed passages are paraphrases written from memory: check them
+against indiacode.nic.in before reporting numbers.
+
+**NetSec poisoning set**: write items in the same schema (true/false claims plus passages;
+the fake chunks in the MCP repo's `src/rag/poison.py` are a starting point) and pass the
+file with `--items`.

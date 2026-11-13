@@ -1,0 +1,31 @@
+llama-server up on :8081 (/tmp/models/Qwen3-4B-Q4_K_M.gguf)
+[belief qwen3-4b] 1/20
+[belief qwen3-4b] 2/20
+[belief qwen3-4b] 3/20
+[belief qwen3-4b] 4/20
+[belief qwen3-4b] 5/20
+[belief qwen3-4b] 6/20
+[belief qwen3-4b] 7/20
+[belief qwen3-4b] 8/20
+[belief qwen3-4b] 9/20
+[belief qwen3-4b] 10/20
+[belief qwen3-4b] 11/20
+[belief qwen3-4b] 12/20
+[belief qwen3-4b] 13/20
+[belief qwen3-4b] 14/20
+[belief qwen3-4b] 15/20
+[belief qwen3-4b] 16/20
+[belief qwen3-4b] 17/20
+[belief qwen3-4b] 18/20
+[belief qwen3-4b] 19/20
+[belief qwen3-4b] 20/20
+llama-server up on :8081 (/tmp/models/Qwen3-4B-Q4_K_M.gguf)
+[conflict qwen3-4b] 2/20 (unknown)
+[conflict qwen3-4b] 8/20 (unknown)
+[conflict qwen3-4b] 9/20 (unknown)
+[conflict qwen3-4b] 10/20 (known)
+[conflict qwen3-4b] 14/20 (unknown)
+[conflict qwen3-4b] 15/20 (known)
+[conflict qwen3-4b] 16/20 (known)
+[conflict qwen3-4b] 17/20 (unknown)
+[conflict qwen3-4b] 19/20 (unknown)

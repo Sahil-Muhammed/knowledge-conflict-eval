@@ -1,5 +1,6 @@
 """Minimal OpenAI-compatible chat client (stdlib only) and a llama-server launcher."""
 import json
+import math
 import re
 import subprocess
 import sys
@@ -15,7 +16,9 @@ class Client:
         self.base_url = base_url.rstrip("/")
         self.model = model
 
-    def chat(self, prompt, max_tokens):
+    def chat(self, prompt, max_tokens, logprobs=False):
+        """Returns (text, prompt_tokens, completion_tokens, seconds, top) where `top` is
+        {token: probability} for the first generated token if `logprobs` was requested."""
         body = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
@@ -25,6 +28,8 @@ class Client:
             # Qwen3: disable thinking mode so all models answer directly.
             "chat_template_kwargs": {"enable_thinking": False},
         }
+        if logprobs:
+            body.update(logprobs=True, top_logprobs=10)
         req = urllib.request.Request(f"{self.base_url}/v1/chat/completions",
                                      data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"})
@@ -33,7 +38,11 @@ class Client:
             resp = json.load(r)
         text = _THINK.sub("", resp["choices"][0]["message"]["content"] or "").strip()
         usage = resp.get("usage", {})
-        return text, usage.get("prompt_tokens"), usage.get("completion_tokens"), time.time() - t0
+        top = None
+        content = (resp["choices"][0].get("logprobs") or {}).get("content") or []
+        if content:
+            top = {t["token"]: math.exp(t["logprob"]) for t in content[0].get("top_logprobs", [])}
+        return text, usage.get("prompt_tokens"), usage.get("completion_tokens"), time.time() - t0, top
 
 
 def wait_healthy(base_url, timeout=300):
@@ -49,9 +58,9 @@ def wait_healthy(base_url, timeout=300):
     raise TimeoutError(f"llama-server at {base_url} not healthy after {timeout}s")
 
 
-def launch_llama_server(gguf, port=8080, threads=8, ctx=4096, log_path=None):
-    cmd = ["llama-server", "-m", gguf, "--port", str(port), "-t", str(threads), "-c", str(ctx),
-           "-np", "1", "--jinja", "--reasoning-budget", "0"]
+def launch_llama_server(gguf, port=8080, threads=8, ctx=4096, log_path=None, server_bin="llama-server", ngl=0):
+    cmd = [server_bin, "-m", gguf, "--port", str(port), "-t", str(threads), "-c", str(ctx),
+           "-np", "1", "-ngl", str(ngl), "--jinja", "--reasoning-budget", "0"]
     log = open(log_path, "w") if log_path else subprocess.DEVNULL
     proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
     try:
