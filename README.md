@@ -120,8 +120,14 @@ Use `--limit` locally and do full runs on a GPU.
 
 ## Kaggle
 
-`kaggle/kc-eval.ipynb` is a self-contained notebook: the harness and `data/items.jsonl` are
-embedded in it. The notebook:
+There are two self-contained notebooks, one per item set, because Kaggle refuses notebooks over 1 MB:
+
+- `kaggle/kc-eval.ipynb`: ConflictQA, with the first 300 items of `data/items.jsonl` embedded
+  (`--max-items` to change; about 300 is the most that fits).
+- `kaggle/kc-eval-legal.ipynb`: the Indian-law set, preconfigured with the `false2` conditions
+  and `RESULTS_DIR = "results_legal"`.
+
+Each notebook:
 1. builds llama.cpp `b6814` (the same version as the laptop) with CUDA,
 2. downloads the GGUFs,
 3. runs `run_all.py` with one model per T4,
@@ -135,9 +141,10 @@ embedded in it. The notebook:
 5. To resume an unfinished run, or to skip the llama.cpp build next time, *Add Input* → this
    notebook's previous output. Finished calls and the compiled `llama-server` are reused.
 
-After changing the harness or the item set, run `python kaggle/build_notebook.py` and
-re-import the notebook. Download `results.zip` and unzip it into `results/` to run `report`
-locally.
+After changing the harness or the item set, run `python kaggle/build_notebook.py` (both
+notebooks, or `--set legal` / `--set conflictqa`) and re-import the notebook. Download
+`results.zip` and unzip it into the notebook's results directory (`results/` or `results_legal/`)
+to run `report` locally.
 
 ## Known caveats
 
