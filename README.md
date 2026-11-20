@@ -68,6 +68,12 @@ They show up in the report as `def:<name>` columns beside the framings.
 | `prior_keep` | 0 extra | if the baseline answer contradicts a consistent closed-book belief, keep the belief |
 | `prior_abstain` | 0 extra | same test, but answer "Uncertain" |
 
+The **prior** behind the last two is the model's no-context multiple-choice answer, counted only
+when it picks the same option in both option orders (no prior means the defence does nothing).
+If the answer with context differs from the prior, the context pulled the model away from its
+belief: `prior_keep` returns the prior, `prior_abstain` returns "Uncertain" (flag for a human).
+Neither uses the ground truth, so a deployed system could apply them.
+
 Read a defence on three rows together: **susceptibility** / **majority_poison** (should fall),
 **clean_known** (should not fall) and **uptake** (should not fall). A defence that leans on the
 model's memory lowers susceptibility on `known` items but blocks true evidence wherever the
@@ -144,9 +150,9 @@ locally.
 - **Small models know little long-tail trivia.** Most low-popularity items come out
   `unknown`. Read `known` metrics by popularity bucket and sample more popular items if
   `n` is too small.
-- **Option-order bias.** This is averaged out by randomised order. For the belief stage
-  both orders are run explicitly.
-
+- **Option-order bias.** In the conflict stage this is averaged out by randomised order. In the
+  belief stage both orders are run, and a biased model (Llama-3.2-3B prefers "A") flips
+  between them, so many items it does know end up `mixed` (see Status below).
 - **Few `known` items.** The belief rule is strict and the sample is spread over popularity,
   so a 20-item run leaves 1-3 `known` items per model. `prepare --min-popularity 5000` keeps
   only entities the models are likely to know.
@@ -175,3 +181,43 @@ against indiacode.nic.in before reporting numbers.
 **NetSec poisoning set**: write items in the same schema (true/false claims plus passages;
 the fake chunks in the MCP repo's `src/rag/poison.py` are a starting point) and pass the
 file with `--items`.
+
+## Status and findings so far (Nov 2026)
+
+Done:
+- Harness for belief / conflict / defend stages, 5 prompt framings, 5 training-free defences,
+  first-token probabilities stored for every multiple-choice call.
+- ConflictQA pilot (`results_kaggle_limit20/`): 20 items x 4 models on Kaggle.
+- Indian-law item set (42 items) and its belief stage for Llama-3.2-3B (`results_legal_pilot/`).
+  Conflict and defend stages have not been run on it yet.
+
+Findings (preliminary, small n):
+- **Too few `known` items.** The 20-item pilots leave 1-3 `known` items per model, so
+  susceptibility and defence numbers are fractions of 1-3 and support no conclusion yet.
+- **Memory-based defences trade safety for uptake.** Replaying `prior_keep` on the pilot data
+  stops all poisoning on `known` items, but blocks true evidence where the model is
+  consistently wrong (Gemma uptake 8/8 -> 3/8, Phi 11/11 -> 5/11).
+- **Many "invalid" answers are abstentions** ("I cannot verify...", "the information contains
+  conflicting details"), i.e. conflict detection scored as a parse failure.
+- **Legal belief, Llama-3.2-3B:** 15/42 correct free-form (11 Constitution, 4 statutes,
+  0 transition); 1 known / 17 unknown / 24 mixed. Position bias causes most `mixed`: of the
+  15 it answered correctly, 8 picked the true option in one order and the false one in the other.
+  Mean first-token P(true option) is 0.47 on items answered correctly vs 0.21 otherwise, so a
+  probability-based belief rule would recover these.
+- **No knowledge of the new criminal codes.** On all 7 IPC/CrPC -> BNS/BNSS items Llama refused
+  or invented section numbers (e.g. "Section 94" for cheating) and chose "Uncertain" in multiple
+  choice, except anticipatory bail, where one order chose the repealed CrPC 438. The model
+  therefore has nothing of its own to check a stale or fake passage against. These items show it
+  does not know the new numbers, not that it knows the old ones; a question asking for the
+  IPC/CrPC section would test that.
+- **Two refusals:** the POCSO "age of a child" question (treated as harmful) and the Majority Act.
+
+Next:
+1. Replace the strict belief rule with one based on order-averaged option probabilities.
+2. Verify `legal/seed_facts.jsonl` against indiacode.nic.in, using verbatim text.
+3. Full Kaggle runs: ConflictQA with `prepare --min-popularity 5000`, and the legal set with
+   `false2` / `true+false2`.
+4. Add old-law (IPC/CrPC) belief questions for the transition items.
+5. Connect to the ChromaDB pipeline in the MCP repo so the poison must also win retrieval.
+6. Research question: can a model (or defence) tell a genuine amendment from a forged one,
+   given that trusting memory blocks real legal updates and trusting context accepts fakes?
